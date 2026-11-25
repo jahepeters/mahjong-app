@@ -1,0 +1,1664 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Mahjong Solitaire</title>
+
+  <!-- iOS Web App / PWA Meta-Tags für "Zum Home-Bildschirm" -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Mahjong" />
+  <meta name="theme-color" content="#1e3a2f" />
+
+  <!-- Inline SVG App-Icon für iOS Home-Screen & Browser-Tab -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%231e3a2f'/%3E%3Crect x='42' y='28' width='102' height='130' rx='16' fill='%232e7d32'/%3E%3Crect x='36' y='22' width='102' height='130' rx='16' fill='%23fdf8ee' stroke='%23e5d7be' stroke-width='3'/%3E%3Ctext x='87' y='105' font-family='serif' font-size='64' font-weight='bold' fill='%23c62828' text-anchor='middle'%3E中%3C/text%3E%3C/svg%3E" />
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' fill='%231e3a2f'/%3E%3Crect x='42' y='28' width='102' height='130' rx='16' fill='%232e7d32'/%3E%3Crect x='36' y='22' width='102' height='130' rx='16' fill='%23fdf8ee'/%3E%3Ctext x='87' y='105' font-family='serif' font-size='64' font-weight='bold' fill='%23c62828' text-anchor='middle'%3E中%3C/text%3E%3C/svg%3E" />
+
+  <style>
+    /* ==========================================================================
+       Design Tokens: Ruhiger Filz-Tisch & Elfenbein-Mahjong-Steine
+       ========================================================================== */
+    :root {
+      --bg-table-center: #274c3e;
+      --bg-table-edge: #152b23;
+      --panel-bg: rgba(17, 36, 29, 0.86);
+      --panel-border: rgba(255, 255, 255, 0.12);
+      --text-light: #f7f4ec;
+      --text-muted: #b3c4bc;
+      --accent-gold: #e5b54f;
+      --accent-gold-dark: #b88828;
+      --accent-green: #388e3c;
+
+      /* Stein-Farben (Elfenbein + Bambus-Rücken) */
+      --tile-face: #fdf9f0;
+      --tile-face-blocked: #d9d1c2;
+      --tile-border: #dfd4be;
+      --tile-side-ivory: #d4c6ac;
+      --tile-side-green: #25643b;
+      --tile-selected: #fff3c4;
+      --tile-selected-ring: #f59e0b;
+      --tile-hint: #d1fae5;
+      --tile-hint-ring: #10b981;
+
+      /* Farben der Stein-Familien */
+      --suit-bamboo: #1b6e32;
+      --suit-char: #b91c1c;
+      --suit-dot: #1d4ed8;
+      --suit-wind: #1f2937;
+      --suit-flower: #9333ea;
+      --suit-season: #c2410c;
+
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left: env(safe-area-inset-left, 0px);
+      --safe-right: env(safe-area-inset-right, 0px);
+    }
+
+    /* ==========================================================================
+       Basis & iOS Touch-Schutz
+       ========================================================================== */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 42%, var(--bg-table-center) 0%, var(--bg-table-edge) 100%);
+      color: var(--text-light);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      touch-action: manipulation;
+    }
+
+    .app-shell {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      width: 100%;
+      height: 100dvh;
+      max-width: 720px;
+      margin: 0 auto;
+      padding-top: calc(8px + var(--safe-top));
+      padding-bottom: calc(10px + var(--safe-bottom));
+      padding-left: calc(10px + var(--safe-left));
+      padding-right: calc(10px + var(--safe-right));
+    }
+
+    /* ==========================================================================
+       Header & Statusleiste
+       ========================================================================== */
+    header {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      z-index: 20;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-badge {
+      width: 30px;
+      height: 36px;
+      background: var(--tile-face);
+      color: var(--suit-char);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1.15rem;
+      box-shadow: 2px 3px 0 var(--tile-side-green), 0 4px 10px rgba(0, 0, 0, 0.35);
+    }
+
+    .app-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(180deg, #f0c465 0%, #d69e36 100%);
+      color: #1c1608;
+      border: none;
+      border-radius: 12px;
+      padding: 8px 14px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+      transition: transform 0.12s ease, filter 0.15s ease;
+    }
+
+    .btn-primary:active {
+      transform: scale(0.94);
+    }
+
+    .btn-icon {
+      background: var(--panel-bg);
+      color: var(--text-light);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      width: 36px;
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.12s ease;
+    }
+
+    .btn-icon:active {
+      transform: scale(0.92);
+    }
+
+    /* Info-Leiste: Layout, Steine, Züge & Timer */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr 1fr;
+      align-items: center;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      padding: 7px 10px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      font-size: 0.78rem;
+    }
+
+    .stat-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-right: 1px solid var(--panel-border);
+      padding: 0 4px;
+    }
+
+    .stat-box:last-child {
+      border-right: none;
+    }
+
+    .stat-label {
+      color: var(--text-muted);
+      font-size: 0.67rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .stat-val {
+      font-weight: 700;
+      font-size: 0.92rem;
+      color: var(--text-light);
+      font-variant-numeric: tabular-nums;
+      margin-top: 1px;
+    }
+
+    .stat-val.highlight-moves {
+      color: var(--accent-gold);
+    }
+
+    .stat-val.zero-moves {
+      color: #f87171;
+    }
+
+    /* ==========================================================================
+       Spielfeld-Container & Mahjong-Steine (3D-Schicht-Optik)
+       ========================================================================== */
+    .board-stage {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      margin: 4px 0;
+    }
+
+    .board-canvas {
+      position: relative;
+      /* Breite & Höhe werden dynamisch perfekt auf den Bildschirm skaliert */
+      transition: opacity 0.2s ease;
+    }
+
+    .tile {
+      position: absolute;
+      border-radius: 7px;
+      background: var(--tile-face);
+      border: 1px solid var(--tile-border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: transform 0.14s cubic-bezier(0.2, 0.9, 0.3, 1.2), filter 0.2s ease, background-color 0.15s ease, opacity 0.22s ease;
+      will-change: transform, opacity;
+    }
+
+    /* Freier Stein vs. Gesperrter Stein */
+    .tile.free {
+      background: var(--tile-face);
+      filter: brightness(1);
+    }
+
+    .tile.blocked {
+      background: var(--tile-face-blocked);
+      filter: brightness(0.84) saturate(0.85);
+    }
+
+    /* Ausgewählter Stein */
+    .tile.selected {
+      background: var(--tile-selected) !important;
+      filter: brightness(1.03) !important;
+      outline: 2.5px solid var(--tile-selected-ring);
+      outline-offset: -1px;
+      transform: translate(-2px, -3px) scale(1.04);
+      z-index: 900 !important;
+    }
+
+    /* Tipp-Hervorhebung */
+    .tile.hint {
+      background: var(--tile-hint) !important;
+      filter: brightness(1.03) !important;
+      outline: 2.5px solid var(--tile-hint-ring);
+      outline-offset: -1px;
+      animation: pulseHint 1.1s infinite ease-in-out;
+    }
+
+    @keyframes pulseHint {
+      0%, 100% { transform: scale(1); }
+      50% { transform: translate(-1px, -2px) scale(1.05); }
+    }
+
+    /* Stein-Entfernungsanimation */
+    .tile.removing {
+      opacity: 0;
+      transform: scale(0.65);
+      pointer-events: none;
+    }
+
+    /* Schüttel-Animation bei gesperrtem Stein */
+    .tile.shake {
+      animation: shakeTile 0.28s ease-in-out;
+    }
+
+    @keyframes shakeTile {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-3px); }
+      75% { transform: translateX(3px); }
+    }
+
+    /* Innenleben eines Steins: Eck-Index, Symbol & lesbares Label */
+    .tile-corner {
+      position: absolute;
+      top: 2px;
+      left: 3.5px;
+      font-weight: 800;
+      line-height: 1;
+      opacity: 0.9;
+    }
+
+    .tile-symbol {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      margin-top: 4px;
+    }
+
+    .tile-sub {
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 2.5px;
+      letter-spacing: -0.02em;
+      opacity: 0.92;
+    }
+
+    /* Familien-Farben */
+    .suit-bamboo { color: var(--suit-bamboo); }
+    .suit-char   { color: var(--suit-char); }
+    .suit-dot    { color: var(--suit-dot); }
+    .suit-wind   { color: var(--suit-wind); }
+    .suit-flower { color: var(--suit-flower); }
+    .suit-season { color: var(--suit-season); }
+
+    /* ==========================================================================
+       Untere Aktionsleiste
+       ========================================================================== */
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      z-index: 20;
+    }
+
+    .tool-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      background: var(--panel-bg);
+      color: var(--text-light);
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      padding: 9px 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: transform 0.12s ease, opacity 0.2s ease, border-color 0.2s ease;
+    }
+
+    .tool-btn:active {
+      transform: scale(0.93);
+    }
+
+    .tool-btn:disabled {
+      opacity: 0.38;
+      pointer-events: none;
+    }
+
+    .tool-btn.urgent {
+      border-color: var(--accent-gold);
+      box-shadow: 0 0 12px rgba(229, 181, 79, 0.35);
+      color: var(--accent-gold);
+    }
+
+    /* ==========================================================================
+       Banner, Toast & Modals
+       ========================================================================== */
+    .toast {
+      position: fixed;
+      top: calc(14px + var(--safe-top));
+      left: 50%;
+      transform: translateX(-50%) translateY(-80px);
+      background: #fdf9f0;
+      color: #1c1917;
+      padding: 9px 18px;
+      border-radius: 20px;
+      font-size: 0.86rem;
+      font-weight: 700;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.1), opacity 0.22s ease;
+      white-space: nowrap;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    /* Hinweis-Banner wenn keine Züge mehr frei sind */
+    .deadlock-banner {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(24, 24, 27, 0.94);
+      border: 1px solid var(--accent-gold);
+      color: var(--text-light);
+      padding: 10px 16px;
+      border-radius: 16px;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+      z-index: 950;
+      width: max-content;
+      max-width: 92%;
+    }
+
+    .deadlock-banner.visible {
+      display: flex;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.58);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 1100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.22s ease;
+    }
+
+    .modal-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-card {
+      background: #1b352b;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: var(--text-light);
+      width: 100%;
+      max-width: 360px;
+      border-radius: 22px;
+      padding: 22px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+      text-align: center;
+      transform: scale(0.94);
+      transition: transform 0.22s ease;
+    }
+
+    .modal-backdrop.open .modal-card {
+      transform: scale(1);
+    }
+
+    .modal-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .modal-sub {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      line-height: 1.4;
+    }
+
+    .layout-list {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      margin-bottom: 14px;
+    }
+
+    .layout-option {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      padding: 13px 15px;
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      color: var(--text-light);
+      text-align: left;
+      cursor: pointer;
+      transition: transform 0.1s ease, background-color 0.15s ease;
+    }
+
+    .layout-option:active {
+      transform: scale(0.97);
+    }
+
+    .layout-option.active-layout {
+      border-color: var(--accent-gold);
+      background: rgba(229, 181, 79, 0.14);
+    }
+
+    .layout-name {
+      font-weight: 700;
+      font-size: 0.98rem;
+      display: block;
+    }
+
+    .layout-desc {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .layout-count {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--accent-gold);
+      background: rgba(0, 0, 0, 0.25);
+      padding: 4px 8px;
+      border-radius: 8px;
+    }
+
+    .btn-ghost {
+      width: 100%;
+      padding: 11px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Legende / Hilfe */
+    .legend-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      text-align: left;
+      margin-bottom: 16px;
+      font-size: 0.8rem;
+    }
+
+    .legend-item {
+      background: rgba(255, 255, 255, 0.06);
+      padding: 8px 10px;
+      border-radius: 10px;
+      line-height: 1.35;
+    }
+
+    /* Sieges-Statistik */
+    .win-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.22);
+      padding: 12px;
+      border-radius: 14px;
+      margin-bottom: 16px;
+    }
+
+    .win-stats span {
+      display: block;
+      font-size: 0.74rem;
+      color: var(--text-muted);
+    }
+
+    .win-stats strong {
+      font-size: 1.1rem;
+      color: var(--accent-gold);
+    }
+
+    #confettiCanvas {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1200;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <canvas id="confettiCanvas"></canvas>
+
+  <div class="app-shell">
+    <!-- Kopfbereich -->
+    <header>
+      <div class="top-bar">
+        <div class="brand">
+          <div class="brand-badge">中</div>
+          <h1 class="app-title">Mahjong</h1>
+        </div>
+        <div class="header-actions">
+          <button id="helpBtn" class="btn-icon" aria-label="Spielregeln" title="Spielregeln & Steine">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+          </button>
+          <button id="newGameBtn" class="btn-primary">Neues Spiel</button>
+        </div>
+      </div>
+
+      <!-- Statuszeile -->
+      <div class="stats-bar">
+        <div class="stat-box">
+          <span class="stat-label">Layout</span>
+          <span id="layoutLabel" class="stat-val">Schildkröte</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">Steine</span>
+          <span id="tilesLeftLabel" class="stat-val">144</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">Freie Züge</span>
+          <span id="movesLeftLabel" class="stat-val highlight-moves">0</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">Zeit</span>
+          <span id="timerLabel" class="stat-val">00:00</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Spielfeld -->
+    <main id="boardStage" class="board-stage">
+      <div id="boardCanvas" class="board-canvas"></div>
+
+      <!-- Deadlock-Hinweis -->
+      <div id="deadlockBanner" class="deadlock-banner">
+        <span style="font-size: 0.85rem; font-weight: 600;">Keine freien Paare mehr!</span>
+        <button id="bannerShuffleBtn" class="btn-primary" style="padding: 6px 12px; font-size: 0.8rem;">Mischen</button>
+      </div>
+    </main>
+
+    <!-- Untere Steuerung -->
+    <footer class="toolbar">
+      <button id="undoBtn" class="tool-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 7v6h6"></path>
+          <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+        </svg>
+        <span>Zurück</span>
+      </button>
+
+      <button id="hintBtn" class="tool-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 18h6"></path>
+          <path d="M10 22h4"></path>
+          <path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"></path>
+        </svg>
+        <span>Tipp</span>
+      </button>
+
+      <button id="shuffleBtn" class="tool-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="16 3 21 3 21 8"></polyline>
+          <line x1="4" y1="20" x2="21" y2="3"></line>
+          <polyline points="21 16 21 21 16 21"></polyline>
+          <line x1="15" y1="15" x2="21" y2="21"></line>
+          <line x1="4" y1="4" x2="9" y2="9"></line>
+        </svg>
+        <span>Mischen</span>
+      </button>
+
+      <button id="restartBtn" class="tool-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+        </svg>
+        <span>Neu starten</span>
+      </button>
+    </footer>
+  </div>
+
+  <!-- Modal: Neues Spiel / Layout auswählen -->
+  <div id="layoutModal" class="modal-backdrop">
+    <div class="modal-card">
+      <h2 class="modal-title">Neues Mahjong</h2>
+      <p class="modal-sub">Wähle eine Formation. Jedes Spiel wird garantiert lösbar aufgebaut.</p>
+
+      <div class="layout-list">
+        <button class="layout-option" data-layout="turtle">
+          <div>
+            <span class="layout-name">Schildkröte (Klassisch)</span>
+            <span class="layout-desc">Das traditionelle 5-stufige Shanghai-Brett</span>
+          </div>
+          <span class="layout-count">144 Steine</span>
+        </button>
+
+        <button class="layout-option" data-layout="pyramid">
+          <div>
+            <span class="layout-name">Stufen-Pyramide</span>
+            <span class="layout-desc">5 Ebenen mit klarer Spitze in der Mitte</span>
+          </div>
+          <span class="layout-count">120 Steine</span>
+        </button>
+
+        <button class="layout-option" data-layout="fortress">
+          <div>
+            <span class="layout-name">Kaiserliche Festung</span>
+            <span class="layout-desc">4 Ecktürme & erhöhte Zitadelle</span>
+          </div>
+          <span class="layout-count">108 Steine</span>
+        </button>
+      </div>
+
+      <button id="closeLayoutModal" class="btn-ghost">Abbrechen</button>
+    </div>
+  </div>
+
+  <!-- Modal: Spielregeln & Stein-Übersicht -->
+  <div id="helpModal" class="modal-backdrop">
+    <div class="modal-card">
+      <h2 class="modal-title">Spielregeln & Steine</h2>
+      <p class="modal-sub">Entferne alle Paare vom Brett. Ein Stein ist <strong>frei</strong> (hell), wenn oben kein Stein liegt und links oder rechts Platz ist.</p>
+
+      <div class="legend-grid">
+        <div class="legend-item">
+          <strong class="suit-bamboo">🀐 Bambus (1–9)</strong><br>
+          Grün markiert, gleiche Zahl bildet ein Paar.
+        </div>
+        <div class="legend-item">
+          <strong class="suit-char">🀇 Zeichen (1–9)</strong><br>
+          Rot markiert, oben links steht die Zahl.
+        </div>
+        <div class="legend-item">
+          <strong class="suit-dot">🀙 Kreise (1–9)</strong><br>
+          Blau markiert, gleiche Zahl bildet ein Paar.
+        </div>
+        <div class="legend-item">
+          <strong class="suit-wind">🀀 Winde & Drachen</strong><br>
+          O, S, W, N sowie Rot (中), Grün (發), Weiß.
+        </div>
+        <div class="legend-item" style="grid-column: span 2;">
+          <strong class="suit-flower">🌸 Blumen</strong> &amp; <strong class="suit-season">☀️ Jahreszeiten</strong><br>
+          Sondersteine: Beliebige <strong>Blume + Blume</strong> oder <strong>Jahreszeit + Jahreszeit</strong> passen immer zusammen!
+        </div>
+      </div>
+
+      <button id="closeHelpModal" class="btn-primary" style="width: 100%; height: 42px;">Verstanden</button>
+    </div>
+  </div>
+
+  <!-- Modal: Spiel gewonnen -->
+  <div id="winModal" class="modal-backdrop">
+    <div class="modal-card">
+      <div style="font-size: 2.5rem; margin-bottom: 4px;">🀄✨</div>
+      <h2 class="modal-title">Brett abgeräumt!</h2>
+      <p class="modal-sub">Hervorragend gespielt! Alle Steine wurden erfolgreich kombiniert.</p>
+
+      <div class="win-stats">
+        <div>
+          <span>Formation</span>
+          <strong id="winLayout">Schildkröte</strong>
+        </div>
+        <div>
+          <span>Spielzeit</span>
+          <strong id="winTime">00:00</strong>
+        </div>
+      </div>
+
+      <button id="winNewGameBtn" class="btn-primary" style="width: 100%; height: 44px; font-size: 0.98rem;">Nächstes Spiel</button>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * ==========================================================================
+     * MAHJONG SOLITAIRE ENGINE (SHANGHAI)
+     * - Rückwärts-Konstruktion garantiert 100% Lösbarkeit jedes Bretts
+     * - Halb-Raster-Koordinaten (x, y in 0.5-Schritten, z = Ebene 0..4)
+     * - Komplett selbstständig in einer HTML-Datei mit LocalStorage
+     * ==========================================================================
+     */
+
+    const STORAGE_KEY = 'mahjong_ios_save_v1';
+
+    // --------------------------------------------------------------------------
+    // 1. Definition aller 144 Mahjong-Steine mit klaren iPhone-Labels
+    // --------------------------------------------------------------------------
+    const TILE_SET_144 = (() => {
+      const tiles = [];
+
+      // 1-9 Bambus (je 4x)
+      const bambooGlyphs = ['🀐','🀑','🀒','🀓','🀔','🀕','🀖','🀗','🀘'];
+      for (let n = 1; n <= 9; n++) {
+        for (let c = 0; c < 4; c++) {
+          tiles.push({
+            matchKey: `bamboo-${n}`,
+            suit: 'bamboo',
+            corner: String(n),
+            symbol: bambooGlyphs[n - 1],
+            sub: 'Bambus'
+          });
+        }
+      }
+
+      // 1-9 Zeichen (je 4x)
+      const charGlyphs = ['🀇','🀈','🀉','🀊','🀋','🀌','🀍','🀎','🀏'];
+      for (let n = 1; n <= 9; n++) {
+        for (let c = 0; c < 4; c++) {
+          tiles.push({
+            matchKey: `char-${n}`,
+            suit: 'char',
+            corner: String(n),
+            symbol: charGlyphs[n - 1],
+            sub: 'Zeichen'
+          });
+        }
+      }
+
+      // 1-9 Kreise (je 4x)
+      const dotGlyphs = ['🀙','🀚','🀛','🀜','🀝','🀞','🀟','🀠','🀡'];
+      for (let n = 1; n <= 9; n++) {
+        for (let c = 0; c < 4; c++) {
+          tiles.push({
+            matchKey: `dot-${n}`,
+            suit: 'dot',
+            corner: String(n),
+            symbol: dotGlyphs[n - 1],
+            sub: 'Kreise'
+          });
+        }
+      }
+
+      // Winde: Ost, Süd, West, Nord (je 4x)
+      const winds = [
+        { key: 'east',  corner: 'O', symbol: '🀀', sub: 'Ost' },
+        { key: 'south', corner: 'S', symbol: '🀁', sub: 'Süd' },
+        { key: 'west',  corner: 'W', symbol: '🀂', sub: 'West' },
+        { key: 'north', corner: 'N', symbol: '🀃', sub: 'Nord' }
+      ];
+      for (const w of winds) {
+        for (let c = 0; c < 4; c++) {
+          tiles.push({
+            matchKey: `wind-${w.key}`,
+            suit: 'wind',
+            corner: w.corner,
+            symbol: w.symbol,
+            sub: w.sub
+          });
+        }
+      }
+
+      // Drachen: Rot, Grün, Weiß (je 4x)
+      const dragons = [
+        { key: 'red',   suit: 'char',   corner: 'R', symbol: '🀄', sub: 'Drache' },
+        { key: 'green', suit: 'bamboo', corner: 'G', symbol: '🀅', sub: 'Drache' },
+        { key: 'white', suit: 'dot',    corner: 'W', symbol: '🀆', sub: 'Weiß' }
+      ];
+      for (const d of dragons) {
+        for (let c = 0; c < 4; c++) {
+          tiles.push({
+            matchKey: `dragon-${d.key}`,
+            suit: d.suit,
+            corner: d.corner,
+            symbol: d.symbol,
+            sub: d.sub
+          });
+        }
+      }
+
+      // 4 Blumen (alle passen untereinander über matchKey 'flower')
+      const flowers = [
+        { symbol: '🀢', sub: 'Pflaume' },
+        { symbol: '🀣', sub: 'Orchidee' },
+        { symbol: '🀤', sub: 'Chrys.' },
+        { symbol: '🀥', sub: 'Bambus' }
+      ];
+      for (const f of flowers) {
+        tiles.push({
+          matchKey: 'flower',
+          suit: 'flower',
+          corner: '❀',
+          symbol: f.symbol,
+          sub: f.sub
+        });
+      }
+
+      // 4 Jahreszeiten (alle passen untereinander über matchKey 'season')
+      const seasons = [
+        { symbol: '🀦', sub: 'Frühling' },
+        { symbol: '🀧', sub: 'Sommer' },
+        { symbol: '🀨', sub: 'Herbst' },
+        { symbol: '🀩', sub: 'Winter' }
+      ];
+      for (const s of seasons) {
+        tiles.push({
+          matchKey: 'season',
+          suit: 'season',
+          corner: '☀',
+          symbol: s.symbol,
+          sub: s.sub
+        });
+      }
+
+      return tiles; // Exakt 144 Steine
+    })();
+
+    // --------------------------------------------------------------------------
+    // 2. Layouts (Koordinaten in Stein-Einheiten: Breite=1, Höhe=1)
+    // --------------------------------------------------------------------------
+    function buildLayoutCoordinates(type) {
+      const coords = [];
+      const addRect = (xStart, xEnd, yStart, yEnd, z) => {
+        for (let y = yStart; y <= yEnd + 0.001; y += 1) {
+          for (let x = xStart; x <= xEnd + 0.001; x += 1) {
+            coords.push({ x, y, z });
+          }
+        }
+      };
+
+      if (type === 'turtle') {
+        // Klassisches 144-Steine Schildkröten-Layout
+        // Ebene 0 (87 Steine)
+        addRect(1, 12, 0, 0, 0);     // 12
+        addRect(3, 10, 1, 1, 0);     // 8
+        addRect(2, 11, 2, 2, 0);     // 10
+        addRect(1, 12, 3, 3, 0);     // 12
+        addRect(1, 12, 4, 4, 0);     // 12
+        addRect(2, 11, 5, 5, 0);     // 10
+        addRect(3, 10, 6, 6, 0);     // 8
+        addRect(1, 12, 7, 7, 0);     // 12
+        coords.push({ x: 0, y: 3.5, z: 0 });   // Linker Flügel (1)
+        coords.push({ x: 13, y: 3.5, z: 0 });  // Rechter Kopf-Teil 1 (1)
+        coords.push({ x: 14, y: 3.5, z: 0 });  // Rechter Kopf-Teil 2 (1)
+
+        // Ebene 1 (36 Steine: 6x6)
+        addRect(4, 9, 1, 6, 1);
+
+        // Ebene 2 (16 Steine: 4x4)
+        addRect(5, 8, 2, 5, 2);
+
+        // Ebene 3 (4 Steine: 2x2)
+        addRect(6, 7, 3, 4, 3);
+
+        // Ebene 4 (1 Spitzen-Stein)
+        coords.push({ x: 6.5, y: 3.5, z: 4 });
+        return coords; // 87 + 36 + 16 + 4 + 1 = 144
+      }
+
+      if (type === 'pyramid') {
+        // Stufen-Pyramide (120 Steine)
+        addRect(0, 7, 0, 7, 0);      // 64
+        addRect(1, 6, 1, 6, 1);      // 36
+        addRect(2, 5, 2, 5, 2);      // 16
+        addRect(3, 4, 3, 4, 3);      // 4
+        return coords; // 64 + 36 + 16 + 4 = 120
+      }
+
+      if (type === 'fortress') {
+        // Kaiserliche Festung (108 Steine)
+        addRect(0, 9, 0, 5, 0);      // Basis 10x6 = 60
+        // 4 Ecktürme (je 2x2 auf Ebene 1 & 2 = 32)
+        addRect(0, 1, 0, 1, 1);
+        addRect(8, 9, 0, 1, 1);
+        addRect(0, 1, 4, 5, 1);
+        addRect(8, 9, 4, 5, 1);
+        addRect(0, 1, 0, 1, 2);
+        addRect(8, 9, 0, 1, 2);
+        addRect(0, 1, 4, 5, 2);
+        addRect(8, 9, 4, 5, 2);
+        // Zentrale Zitadelle (4x3 = 12 auf Ebene 1, 2x2 = 4 auf Ebene 2)
+        addRect(3, 6, 1.5, 3.5, 1);
+        addRect(4, 5, 2, 3, 2);
+        return coords; // 60 + 32 + 12 + 4 = 108
+      }
+
+      return buildLayoutCoordinates('turtle');
+    }
+
+    const LAYOUT_NAMES = {
+      turtle: 'Schildkröte',
+      pyramid: 'Pyramide',
+      fortress: 'Festung'
+    };
+
+    // --------------------------------------------------------------------------
+    // 3. Spielzustand & DOM Referenzen
+    // --------------------------------------------------------------------------
+    let state = {
+      layout: 'turtle',
+      tiles: [],         // { id, x, y, z, removed, matchKey, suit, corner, symbol, sub }
+      initialTiles: [],  // Kopie für "Neu starten"
+      selectedId: null,
+      hintIds: [],
+      history: [],       // Array aus [id1, id2]
+      seconds: 0,
+      isWon: false
+    };
+
+    let timerInterval = null;
+    let toastTimeout = null;
+    let tileWidth = 38;
+    let tileHeight = 50;
+
+    const boardStage = document.getElementById('boardStage');
+    const boardCanvas = document.getElementById('boardCanvas');
+    const layoutLabel = document.getElementById('layoutLabel');
+    const tilesLeftLabel = document.getElementById('tilesLeftLabel');
+    const movesLeftLabel = document.getElementById('movesLeftLabel');
+    const timerLabel = document.getElementById('timerLabel');
+    const deadlockBanner = document.getElementById('deadlockBanner');
+    const toastEl = document.getElementById('toast');
+
+    // --------------------------------------------------------------------------
+    // 4. Regel-Logik: Wann ist ein Stein "frei"?
+    // --------------------------------------------------------------------------
+    function isTileFree(tile, activeTiles) {
+      if (tile.removed) return false;
+
+      let blockedLeft = false;
+      let blockedRight = false;
+
+      for (const other of activeTiles) {
+        if (other.id === tile.id || other.removed) continue;
+
+        // 1. Liegt ein Stein direkt darüber (z === tile.z + 1) und überlappt?
+        if (other.z === tile.z + 1) {
+          if (Math.abs(other.x - tile.x) < 0.95 && Math.abs(other.y - tile.y) < 0.95) {
+            return false;
+          }
+        }
+
+        // 2. Gleiche Ebene (z === tile.z) & vertikale Überlappung -> links/rechts blockiert?
+        if (other.z === tile.z && Math.abs(other.y - tile.y) < 0.95) {
+          const dx = other.x - tile.x;
+          if (dx >= -1.05 && dx <= -0.95) blockedLeft = true;
+          if (dx >= 0.95 && dx <= 1.05) blockedRight = true;
+        }
+      }
+
+      return !(blockedLeft && blockedRight);
+    }
+
+    function findAvailablePairs(tiles) {
+      const active = tiles.filter(t => !t.removed);
+      const freeTiles = active.filter(t => isTileFree(t, active));
+      const pairs = [];
+
+      for (let i = 0; i < freeTiles.length; i++) {
+        for (let j = i + 1; j < freeTiles.length; j++) {
+          if (freeTiles[i].matchKey === freeTiles[j].matchKey) {
+            pairs.push([freeTiles[i], freeTiles[j]]);
+          }
+        }
+      }
+      return pairs;
+    }
+
+    // --------------------------------------------------------------------------
+    // 5. Garantierte Lösbarkeit: Rückwärts-Konstruktion beim Befüllen
+    // --------------------------------------------------------------------------
+    function shuffleArray(arr) {
+      const copy = arr.slice();
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    }
+
+    // Erzeugt einen Pool aus N/2 passenden Stein-Paaren
+    function createTilePairsPool(pairCount) {
+      // Gruppiere alle 144 Steine nach matchKey
+      const groups = new Map();
+      for (const t of TILE_SET_144) {
+        if (!groups.has(t.matchKey)) groups.set(t.matchKey, []);
+        groups.get(t.matchKey).push({ ...t });
+      }
+
+      const allPairs = [];
+      for (const [, list] of groups.entries()) {
+        const shuffled = shuffleArray(list);
+        for (let i = 0; i + 1 < shuffled.length; i += 2) {
+          allPairs.push([shuffled[i], shuffled[i + 1]]);
+        }
+      }
+
+      return shuffleArray(allPairs).slice(0, pairCount);
+    }
+
+    // Konstruiert das Brett rückwärts, indem immer zwei aktuell "freie" Positionen
+    // mit einem passenden Paar belegt und virtuell abgeräumt werden.
+    function generateSolvableBoard(layoutType) {
+      const coords = buildLayoutCoordinates(layoutType);
+      const total = coords.length;
+      const pairCount = total / 2;
+
+      // Versuche bis zu 25 Mal eine perfekte Rückwärts-Konstruktion
+      for (let attempt = 0; attempt < 25; attempt++) {
+        const simTiles = coords.map((c, idx) => ({
+          id: idx,
+          x: c.x,
+          y: c.y,
+          z: c.z,
+          removed: false,
+          tileData: null
+        }));
+
+        const pairsPool = createTilePairsPool(pairCount);
+        let success = true;
+
+        for (let step = 0; step < pairCount; step++) {
+          const active = simTiles.filter(t => !t.removed);
+          const free = active.filter(t => isTileFree(t, active));
+
+          if (free.length < 2) {
+            success = false;
+            break;
+          }
+
+          // Bevorzuge leicht höhere Ebenen, damit Türme nicht am Ende übrig bleiben
+          const weighted = shuffleArray(free).sort((a, b) => (b.z - a.z) * (Math.random() * 0.7));
+          const slotA = weighted[0];
+          const slotB = weighted[1];
+
+          const [dataA, dataB] = pairsPool[step];
+          slotA.tileData = dataA;
+          slotB.tileData = dataB;
+          slotA.removed = true;
+          slotB.removed = true;
+        }
+
+        if (success) {
+          return simTiles.map(s => ({
+            id: s.id,
+            x: s.x,
+            y: s.y,
+            z: s.z,
+            removed: false,
+            ...s.tileData
+          }));
+        }
+      }
+
+      // Fallback (falls ein ungewöhnliches Layout im Versuch feststeckt)
+      const fallbackPool = createTilePairsPool(pairCount).flat();
+      return coords.map((c, idx) => ({
+        id: idx,
+        x: c.x,
+        y: c.y,
+        z: c.z,
+        removed: false,
+        ...fallbackPool[idx]
+      }));
+    }
+
+    // --------------------------------------------------------------------------
+    // 6. Spielstart, Speichern & Laden
+    // --------------------------------------------------------------------------
+    function startNewGame(layoutType = 'turtle') {
+      const generated = generateSolvableBoard(layoutType);
+      state = {
+        layout: layoutType,
+        tiles: generated,
+        initialTiles: generated.map(t => ({ ...t })),
+        selectedId: null,
+        hintIds: [],
+        history: [],
+        seconds: 0,
+        isWon: false
+      };
+
+      saveState();
+      renderAll();
+      startTimer();
+    }
+
+    function restartCurrentBoard() {
+      if (!state.initialTiles || state.initialTiles.length === 0) return;
+      state.tiles = state.initialTiles.map(t => ({ ...t, removed: false }));
+      state.selectedId = null;
+      state.hintIds = [];
+      state.history = [];
+      state.seconds = 0;
+      state.isWon = false;
+
+      saveState();
+      renderAll();
+      startTimer();
+      showToast('Brett neu gestartet');
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (e) {
+        console.warn('Spielstand konnte nicht gespeichert werden:', e);
+      }
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return false;
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.tiles) && parsed.tiles.length > 0) {
+          state = parsed;
+          return true;
+        }
+      } catch (e) {
+        console.warn('Spielstand konnte nicht geladen werden:', e);
+      }
+      return false;
+    }
+
+    // --------------------------------------------------------------------------
+    // 7. Responsives Scaling & Rendering des Bretts
+    // --------------------------------------------------------------------------
+    function calculateBoardDimensions() {
+      const stageRect = boardStage.getBoundingClientRect();
+      const availW = Math.max(260, stageRect.width - 12);
+      const availH = Math.max(260, stageRect.height - 12);
+
+      // Finde Grenzen des aktuellen Layouts
+      let maxX = 0;
+      let maxY = 0;
+      let maxZ = 0;
+      for (const t of state.tiles) {
+        if (t.x + 1 > maxX) maxX = t.x + 1;
+        if (t.y + 1 > maxY) maxY = t.y + 1;
+        if (t.z > maxZ) maxZ = t.z;
+      }
+
+      // Seitenverhältnis eines Mahjong-Steins ca. 1 : 1.32
+      const aspect = 1.32;
+      const extraDepth = (maxZ + 1) * 5;
+
+      const wFromWidth = (availW - extraDepth) / maxX;
+      const wFromHeight = (availH - extraDepth) / (maxY * aspect);
+
+      tileWidth = Math.floor(Math.min(wFromWidth, wFromHeight));
+      tileWidth = Math.max(22, Math.min(tileWidth, 58));
+      tileHeight = Math.round(tileWidth * aspect);
+
+      const boardW = Math.round(maxX * tileWidth + extraDepth);
+      const boardH = Math.round(maxY * tileHeight + extraDepth);
+
+      boardCanvas.style.width = `${boardW}px`;
+      boardCanvas.style.height = `${boardH}px`;
+    }
+
+    function renderAll() {
+      calculateBoardDimensions();
+      renderBoard();
+      updateStatsAndToolbar();
+    }
+
+    function renderBoard() {
+      boardCanvas.innerHTML = '';
+
+      const activeTiles = state.tiles.filter(t => !t.removed);
+
+      // Sortiere Steine nach Ebene (z), Y und X für korrekte 3D-Überlappung
+      const sorted = activeTiles.slice().sort((a, b) => {
+        if (a.z !== b.z) return a.z - b.z;
+        if (a.y !== b.y) return a.y - b.y;
+        return a.x - b.x;
+      });
+
+      const depthStepX = Math.max(2, Math.round(tileWidth * 0.085));
+      const depthStepY = Math.max(2, Math.round(tileHeight * 0.075));
+
+      const cornerSize = Math.max(8, Math.round(tileWidth * 0.25));
+      const symbolSize = Math.max(15, Math.round(tileWidth * 0.56));
+      const subSize = Math.max(6, Math.round(tileWidth * 0.175));
+
+      for (const tile of sorted) {
+        const free = isTileFree(tile, activeTiles);
+        const isSelected = state.selectedId === tile.id;
+        const isHint = state.hintIds.includes(tile.id);
+
+        const el = document.createElement('div');
+        el.className = `tile ${free ? 'free' : 'blocked'}${isSelected ? ' selected' : ''}${isHint ? ' hint' : ''}`;
+        el.dataset.id = tile.id;
+
+        const left = Math.round(tile.x * tileWidth + tile.z * depthStepX);
+        const top = Math.round(tile.y * tileHeight - tile.z * depthStepY + (4 * depthStepY));
+
+        el.style.width = `${tileWidth - 1}px`;
+        el.style.height = `${tileHeight - 1}px`;
+        el.style.left = `${left}px`;
+        el.style.top = `${top}px`;
+        el.style.zIndex = 10 + tile.z * 100 + Math.round(tile.y * 5);
+
+        // 3D-Seitenkante (Elfenbein + grüner Bambusrücken)
+        const sideW = Math.max(2, Math.round(tileWidth * 0.07));
+        const sideH = Math.max(3, Math.round(tileHeight * 0.07));
+        el.style.boxShadow = `
+          ${sideW * 0.6}px ${sideH * 0.6}px 0 var(--tile-side-ivory),
+          ${sideW}px ${sideH}px 0 var(--tile-side-green),
+          ${sideW + 2}px ${sideH + 4}px ${6 + tile.z * 2}px rgba(0, 0, 0, ${0.28 + tile.z * 0.06})
+        `;
+
+        el.innerHTML = `
+          <span class="tile-corner suit-${tile.suit}" style="font-size:${cornerSize}px">${tile.corner}</span>
+          <span class="tile-symbol suit-${tile.suit}" style="font-size:${symbolSize}px">${tile.symbol}</span>
+          <span class="tile-sub suit-${tile.suit}" style="font-size:${subSize}px">${tile.sub}</span>
+        `;
+
+        el.addEventListener('click', () => handleTileTap(tile.id, el));
+        boardCanvas.appendChild(el);
+      }
+    }
+
+    function updateStatsAndToolbar() {
+      const remaining = state.tiles.filter(t => !t.removed).length;
+      const pairs = findAvailablePairs(state.tiles);
+
+      layoutLabel.textContent = LAYOUT_NAMES[state.layout] || 'Schildkröte';
+      tilesLeftLabel.textContent = remaining;
+      movesLeftLabel.textContent = pairs.length;
+      timerLabel.textContent = formatTime(state.seconds);
+
+      if (pairs.length === 0 && remaining > 0) {
+        movesLeftLabel.className = 'stat-val zero-moves';
+        deadlockBanner.classList.add('visible');
+        document.getElementById('shuffleBtn').classList.add('urgent');
+      } else {
+        movesLeftLabel.className = 'stat-val highlight-moves';
+        deadlockBanner.classList.remove('visible');
+        document.getElementById('shuffleBtn').classList.remove('urgent');
+      }
+
+      document.getElementById('undoBtn').disabled = state.history.length === 0 || state.isWon;
+      document.getElementById('hintBtn').disabled = pairs.length === 0 || state.isWon;
+      document.getElementById('shuffleBtn').disabled = remaining <= 2 || state.isWon;
+    }
+
+    // --------------------------------------------------------------------------
+    // 8. Interaktionen: Stein wählen, Paare entfernen, Tipp, Undo, Mischen
+    // --------------------------------------------------------------------------
+    function handleTileTap(tileId, domEl) {
+      if (state.isWon) return;
+
+      const tile = state.tiles.find(t => t.id === tileId);
+      if (!tile || tile.removed) return;
+
+      const activeTiles = state.tiles.filter(t => !t.removed);
+      if (!isTileFree(tile, activeTiles)) {
+        // Visuelles Feedback, dass Stein blockiert ist
+        domEl.classList.remove('shake');
+        void domEl.offsetWidth;
+        domEl.classList.add('shake');
+        triggerHaptic('blocked');
+        showToast('Dieser Stein ist noch blockiert');
+        return;
+      }
+
+      state.hintIds = [];
+
+      // Abwählen, falls derselbe Stein erneut angetippt wird
+      if (state.selectedId === tileId) {
+        state.selectedId = null;
+        renderBoard();
+        return;
+      }
+
+      // Ersten Stein auswählen
+      if (state.selectedId === null) {
+        state.selectedId = tileId;
+        triggerHaptic('select');
+        renderBoard();
+        return;
+      }
+
+      // Zweiten Stein prüfen
+      const firstTile = state.tiles.find(t => t.id === state.selectedId);
+      if (firstTile && firstTile.matchKey === tile.matchKey) {
+        // Treffer! Paar entfernen
+        triggerHaptic('match');
+        state.history.push([firstTile.id, tile.id]);
+        state.selectedId = null;
+
+        // Sanfte Ausblend-Animation vor dem Neuzeichnen
+        const el1 = boardCanvas.querySelector(`.tile[data-id="${firstTile.id}"]`);
+        const el2 = domEl;
+        if (el1) el1.classList.add('removing');
+        if (el2) el2.classList.add('removing');
+
+        firstTile.removed = true;
+        tile.removed = true;
+        saveState();
+
+        setTimeout(() => {
+          renderBoard();
+          updateStatsAndToolbar();
+          checkWinCondition();
+        }, 160);
+      } else {
+        // Passt nicht -> neuen Stein direkt als Auswahl übernehmen
+        state.selectedId = tileId;
+        triggerHaptic('select');
+        renderBoard();
+      }
+    }
+
+    function handleUndo() {
+      if (state.history.length === 0 || state.isWon) return;
+      const [id1, id2] = state.history.pop();
+      const t1 = state.tiles.find(t => t.id === id1);
+      const t2 = state.tiles.find(t => t.id === id2);
+      if (t1) t1.removed = false;
+      if (t2) t2.removed = false;
+
+      state.selectedId = null;
+      state.hintIds = [];
+      saveState();
+      renderBoard();
+      updateStatsAndToolbar();
+      showToast('Zug rückgängig gemacht');
+    }
+
+    function handleHint() {
+      if (state.isWon) return;
+      const pairs = findAvailablePairs(state.tiles);
+      if (pairs.length === 0) {
+        showToast('Keine freien Paare – bitte mischen');
+        return;
+      }
+
+      // Falls bereits ein freier Stein gewählt ist, bevorzugt dessen Partner zeigen
+      let chosenPair = pairs[0];
+      if (state.selectedId !== null) {
+        const matchingForSelected = pairs.find(
+          p => p[0].id === state.selectedId || p[1].id === state.selectedId
+        );
+        if (matchingForSelected) chosenPair = matchingForSelected;
+      }
+
+      state.selectedId = null;
+      state.hintIds = [chosenPair[0].id, chosenPair[1].id];
+      renderBoard();
+    }
+
+    function handleShuffle() {
+      if (state.isWon) return;
+      const active = state.tiles.filter(t => !t.removed);
+      if (active.length <= 2) return;
+
+      // Extrahiere alle noch vorhandenen Stein-Daten
+      const faces = active.map(t => ({
+        matchKey: t.matchKey,
+        suit: t.suit,
+        corner: t.corner,
+        symbol: t.symbol,
+        sub: t.sub
+      }));
+
+      // Mische solange, bis mindestens 1 freier Zug entsteht (max 30 Versuche)
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const shuffled = shuffleArray(faces);
+        active.forEach((tile, idx) => {
+          Object.assign(tile, shuffled[idx]);
+        });
+        if (findAvailablePairs(state.tiles).length > 0) break;
+      }
+
+      state.selectedId = null;
+      state.hintIds = [];
+      saveState();
+      renderBoard();
+      updateStatsAndToolbar();
+      showToast('Verbleibende Steine neu gemischt');
+    }
+
+    function checkWinCondition() {
+      const remaining = state.tiles.filter(t => !t.removed).length;
+      if (remaining > 0) return;
+
+      state.isWon = true;
+      stopTimer();
+      saveState();
+
+      document.getElementById('winLayout').textContent = LAYOUT_NAMES[state.layout] || 'Schildkröte';
+      document.getElementById('winTime').textContent = formatTime(state.seconds);
+      openModal('winModal');
+      launchConfetti();
+    }
+
+    // --------------------------------------------------------------------------
+    // 9. Timer, Modals, Haptik & Konfetti
+    // --------------------------------------------------------------------------
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    function startTimer() {
+      stopTimer();
+      if (state.isWon) return;
+      timerInterval = setInterval(() => {
+        if (!document.hidden && !state.isWon) {
+          state.seconds++;
+          timerLabel.textContent = formatTime(state.seconds);
+          if (state.seconds % 5 === 0) saveState();
+        }
+      }, 1000);
+    }
+
+    function stopTimer() {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+    }
+
+    function openModal(id) {
+      if (id === 'layoutModal') {
+        document.querySelectorAll('.layout-option').forEach(btn => {
+          btn.classList.toggle('active-layout', btn.dataset.layout === state.layout);
+        });
+      }
+      document.getElementById(id).classList.add('open');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('open');
+    }
+
+    function showToast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => toastEl.classList.remove('show'), 2100);
+    }
+
+    function triggerHaptic(type) {
+      if (!navigator.vibrate) return;
+      if (type === 'blocked') navigator.vibrate([25, 25, 25]);
+      else if (type === 'match') navigator.vibrate(18);
+      else navigator.vibrate(8);
+    }
+
+    function launchConfetti() {
+      const canvas = document.getElementById('confettiCanvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      const colors = ['#e5b54f', '#34c759', '#ef4444', '#3b82f6', '#fdf9f0'];
+      const particles = Array.from({ length: 85 }, () => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height - canvas.height,
+        w: Math.random() * 8 + 5,
+        h: Math.random() * 5 + 3,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        vy: Math.random() * 3 + 2.4,
+        vx: Math.random() * 2 - 1,
+        angle: Math.random() * 360,
+        spin: Math.random() * 8 - 4
+      }));
+
+      let frame = 0;
+      function tick() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (const p of particles) {
+          p.y += p.vy;
+          p.x += p.vx;
+          p.angle += p.spin;
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate((p.angle * Math.PI) / 180);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+          ctx.restore();
+        }
+        frame++;
+        if (frame < 160) requestAnimationFrame(tick);
+        else ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      tick();
+    }
+
+    // --------------------------------------------------------------------------
+    // 10. Event Listener & Initialisierung
+    // --------------------------------------------------------------------------
+    function bindEvents() {
+      document.getElementById('newGameBtn').addEventListener('click', () => openModal('layoutModal'));
+      document.getElementById('closeLayoutModal').addEventListener('click', () => closeModal('layoutModal'));
+
+      document.querySelectorAll('.layout-option').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const chosen = btn.dataset.layout;
+          closeModal('layoutModal');
+          startNewGame(chosen);
+        });
+      });
+
+      document.getElementById('helpBtn').addEventListener('click', () => openModal('helpModal'));
+      document.getElementById('closeHelpModal').addEventListener('click', () => closeModal('helpModal'));
+
+      document.getElementById('winNewGameBtn').addEventListener('click', () => {
+        closeModal('winModal');
+        openModal('layoutModal');
+      });
+
+      document.getElementById('undoBtn').addEventListener('click', handleUndo);
+      document.getElementById('hintBtn').addEventListener('click', handleHint);
+      document.getElementById('shuffleBtn').addEventListener('click', handleShuffle);
+      document.getElementById('bannerShuffleBtn').addEventListener('click', handleShuffle);
+      document.getElementById('restartBtn').addEventListener('click', restartCurrentBoard);
+
+      // Modals bei Klick außerhalb schließen
+      ['layoutModal', 'helpModal'].forEach(id => {
+        document.getElementById(id).addEventListener('click', (e) => {
+          if (e.target.id === id) closeModal(id);
+        });
+      });
+
+      // Bei Drehung / Größenänderung auf iPhone Brett sofort neu skalieren
+      window.addEventListener('resize', () => {
+        calculateBoardDimensions();
+        renderBoard();
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) saveState();
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      bindEvents();
+      if (loadState()) {
+        renderAll();
+        if (!state.isWon) startTimer();
+      } else {
+        startNewGame('turtle');
+      }
+    });
+  </script>
+</body>
+</html>
